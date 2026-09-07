@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="ClinicAPI/ClinicAPI.csproj" />
+  <Project Path="ClinicAPIBusiness/ClinicAPIBusiness.csproj" />
+</Solution>
