@@ -41,15 +41,24 @@ namespace ClinicAPIBusiness.Services
                 }).ToListAsync();
         }
 
-        public async Task<User?> GetUserByIdAsync(int userId)
+        public async Task<UserViewDTO?> GetUserByIdAsync(int userId)
         {
             if (userId <= 0) return null;
 
             return await _context.Users
                 .AsNoTracking()
-                .Include(u => u.Person)
-                .Include(u => u.Role)      // عشان تعرض اسم الصلاحية الحقيقي بدل "طبيب" الثابتة
-                .FirstOrDefaultAsync(u => u.UserId == userId);
+                .Where(u => u.UserId == userId)
+                .Select(u => new UserViewDTO
+                {
+                    UserId = u.UserId,
+                    Username = u.Username,
+                    FullName = u.Person.FullName, // أو u.Person.FirstName + " " + u.Person.LastName حسب خصائص الكائن لديك
+                    RoleName = u.Role.RoleName,   // اسحب اسم الدور صراحة من جدول Roles
+                    IsActive = u.IsActive,
+                    CreatedDate = u.CreatedDate,
+                    LastLoginDate = u.LastLoginDate
+                })
+                .FirstOrDefaultAsync();
         }
 
         // =========================================================================
@@ -134,7 +143,11 @@ namespace ClinicAPIBusiness.Services
             var user = await _context.Users.FirstOrDefaultAsync(u => u.UserId == userId);
             if (user == null) return false;
 
-            _context.Users.Remove(user);
+            // لو المستخدم أصلاً معطّل، لا داعي لعملية Save إضافية
+            if (!user.IsActive) return true;
+
+            user.IsActive = false;
+
             return await _context.SaveChangesAsync() > 0;
         }
 
