@@ -134,31 +134,51 @@ namespace ClinicAPIBusiness.Services
         /// <summary>
         /// جلب فاتورة محددة بواسطة الـ ID بالتتبع لغايات البزنس أو التعديل
         /// </summary>
-        public async Task<Invoice?> GetInvoiceByIdAsync(int id)
+        public async Task<InvoiceViewDTO?> GetInvoiceByIdAsync(int id)
         {
             if (id <= 0) return null;
 
             return await _context.Invoices
-                // 1. السلسلة الأولى: جلب بيانات المريض كاملة
-                .Include(i => i.Visit)
-                    .ThenInclude(v => v.Appointment)
-                        .ThenInclude(a => a.Patient)
-                            .ThenInclude(p => p.Person)
+                .AsNoTracking()
+                .Where(i => i.InvoiceId == id)
+                .Select(i => new InvoiceViewDTO
+                {
+                    InvoiceId = i.InvoiceId,
+                    VisitId = i.VisitId,
+                    InvoiceNumber = i.InvoiceNumber,
+                    InvoiceDate = i.InvoiceDate,
 
-                // 2. السلسلة الثانية: نعود للـ Visit لجلب بيانات الطبيب والمستخدم الخاص به
-                .Include(i => i.Visit)
-                    .ThenInclude(v => v.Appointment)
-                        .ThenInclude(a => a.Doctor)
-                            .ThenInclude(d => d.User)
-                                .ThenInclude(u => u.Person)
+                    // تفاصيل المبالغ والرسوم
+                    ConsultationFee = i.ConsultationFee,
+                    LabTestFee = i.LabTestFee,
+                    ProcedureFee = i.ProcedureFee,
+                    OtherCharges = i.OtherCharges,
 
-                // 3. السلسلة الثالثة: جلب حالة الفاتورة لتلوينها وعرضها في الشاشة
-                .Include(i => i.Status)
+                    // الضرائب والخصومات
+                    TaxPercentage = i.TaxPercentage,
+                    TaxAmount = i.TaxAmount,
+                    DiscountPercentage = i.DiscountPercentage,
+                    DiscountAmount = i.DiscountAmount,
 
-                // 4. شرط البحث الجوهري بناءً على المعرّف الممرر
-                .FirstOrDefaultAsync(i => i.InvoiceId == id);
+                    // الحالة والتواريخ
+                    InvoiceStatusId = i.StatusId,
+                    StatusName = i.Status != null ? i.Status.StatusName : string.Empty,
+                    DueDate = i.DueDate,
+                    IsActive = i.IsActive,
+
+                    // الحقول الحسابية
+                    SubTotal = i.SubTotal ?? 0,
+                    FinalAmount = i.FinalAmount ?? 0,
+
+                    RemainingAmount = (decimal)(i.FinalAmount - (i.Payments.Sum(p => (decimal?)p.PaymentAmount) ?? 0)),
+
+                    // بيانات إضافية مسطحة من العلاقات
+                    PatientFullName = i.Visit != null && i.Visit.Appointment.Patient != null ? i.Visit.Appointment.Patient.Person.FullName : string.Empty,
+                    VisitDate = i.Visit != null ? i.Visit.VisitDate : default,
+                   
+                })
+                .FirstOrDefaultAsync();
         }
-
         // =========================================================================    
         // 2. العمليات الأساسية (CUD Operations)
         // =========================================================================

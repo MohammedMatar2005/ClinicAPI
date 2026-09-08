@@ -103,7 +103,7 @@ namespace ClinicAPIBusiness.Services
                         DateOfBirth = p.Person.DateOfBirth,
                         Gender = p.Person.Gender,
                         Phone = p.Person.Phone,
-                        Email = p.Person.Email,
+                        Email = p.Person.Email, 
                         Address = p.Person.Address
                     } : new PersonSaveDTO()
                 })
@@ -266,6 +266,46 @@ namespace ClinicAPIBusiness.Services
         {
             return await _context.PatientVisits
                 .CountAsync(v => v.VisitDate.Date == DateTime.Today);
+        }
+
+        /// <summary>
+        /// تعديل جزئي على بيانات مريض - يحدث فقط الحقول التي لها قيمة غير null في الـ DTO
+        /// أي حقل يُترك null يبقى بقيمته الحالية بدون تغيير
+        /// </summary>
+        /// <param name="patientId">معرف المريض</param>
+        /// <param name="patchDto">الحقول المراد تعديلها فقط</param>
+        /// <returns>true لو تم التحديث بنجاح، false لو المريض غير موجود</returns>
+        public async Task<bool> PatchPatientAsync(int patientId, PatientPatchDTO patchDto)
+        {
+            if (patientId <= 0) return false;
+
+            var existingPatient = await _context.Patients
+                .Include(p => p.Person)
+                .FirstOrDefaultAsync(p => p.PatientId == patientId);
+
+            if (existingPatient == null) return false;
+
+            // ── 1. تحديث بيانات الشخص - فقط الحقول غير الـ null ──
+            if (patchDto.FirstName != null) existingPatient.Person.FirstName = patchDto.FirstName;
+            if (patchDto.SecondName != null) existingPatient.Person.SecondName = patchDto.SecondName;
+            if (patchDto.ThirdName != null) existingPatient.Person.ThirdName = patchDto.ThirdName;
+            if (patchDto.LastName != null) existingPatient.Person.LastName = patchDto.LastName;
+            if (patchDto.DateOfBirth.HasValue) existingPatient.Person.DateOfBirth = patchDto.DateOfBirth.Value;
+            if (patchDto.Gender.HasValue) existingPatient.Person.Gender = patchDto.Gender.Value;
+            if (patchDto.Phone != null) existingPatient.Person.Phone = patchDto.Phone;
+            if (patchDto.Email != null) existingPatient.Person.Email = patchDto.Email;
+            if (patchDto.Address != null) existingPatient.Person.Address = patchDto.Address;
+            if (patchDto.NationalNumber != null) existingPatient.Person.NationalNumber = patchDto.NationalNumber;
+
+            // ── 2. تحديث بيانات المريض ──
+            if (patchDto.EmergencyContact != null) existingPatient.EmergencyContact = patchDto.EmergencyContact;
+            if (patchDto.EmergencyPhone != null) existingPatient.EmergencyPhone = patchDto.EmergencyPhone;
+            if (patchDto.BloodType != null) existingPatient.BloodType = patchDto.BloodType;
+            if (patchDto.Allergies != null) existingPatient.Allergies = patchDto.Allergies;
+            if (patchDto.MedicalHistory != null) existingPatient.MedicalHistory = patchDto.MedicalHistory;
+            if (patchDto.IsActive.HasValue) existingPatient.IsActive = patchDto.IsActive.Value;
+
+            return await _context.SaveChangesAsync() > 0;
         }
     }
 }

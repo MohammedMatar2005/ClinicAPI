@@ -282,5 +282,55 @@ namespace ClinicAPIBusiness.Services
                 })
                 .FirstOrDefaultAsync();
         }
+
+        /// <summary>
+        /// تعديل جزئي على بيانات طبيب - يحدث فقط الحقول التي لها قيمة غير null في الـ DTO
+        /// أي حقل يُترك null يبقى بقيمته الحالية بدون تغيير
+        /// </summary>
+        /// <param name="doctorId">معرف الطبيب</param>
+        /// <param name="patchDto">الحقول المراد تعديلها فقط</param>
+        /// <returns>true لو تم التحديث بنجاح، false لو الطبيب غير موجود</returns>
+        public async Task<bool> PatchDoctorAsync(int doctorId, DoctorPatchDTO patchDto)
+        {
+            if (doctorId <= 0) return false;
+
+            var existingDoctor = await _context.Doctors
+                .Include(d => d.User)
+                    .ThenInclude(u => u.Person)
+                .FirstOrDefaultAsync(d => d.DoctorId == doctorId);
+
+            if (existingDoctor == null) return false;
+
+            // ── 1. تحديث بيانات الشخص - فقط الحقول غير الـ null ──
+            if (patchDto.FirstName != null) existingDoctor.User.Person.FirstName = patchDto.FirstName;
+            if (patchDto.SecondName != null) existingDoctor.User.Person.SecondName = patchDto.SecondName;
+            if (patchDto.ThirdName != null) existingDoctor.User.Person.ThirdName = patchDto.ThirdName;
+            if (patchDto.LastName != null) existingDoctor.User.Person.LastName = patchDto.LastName;
+            if (patchDto.DateOfBirth.HasValue) existingDoctor.User.Person.DateOfBirth = patchDto.DateOfBirth.Value;
+            if (patchDto.Gender.HasValue) existingDoctor.User.Person.Gender = patchDto.Gender.Value;
+            if (patchDto.Phone != null) existingDoctor.User.Person.Phone = patchDto.Phone;
+            if (patchDto.Email != null) existingDoctor.User.Person.Email = patchDto.Email;
+            if (patchDto.Address != null) existingDoctor.User.Person.Address = patchDto.Address;
+            if (patchDto.NationalNumber != null) existingDoctor.User.Person.NationalNumber = patchDto.NationalNumber;
+
+            // ── 2. تحديث بيانات المستخدم ──
+            if (patchDto.Username != null) existingDoctor.User.Username = patchDto.Username;
+
+            if (!string.IsNullOrWhiteSpace(patchDto.NewPassword))
+                existingDoctor.User.PasswordHash = BCrypt.Net.BCrypt.HashPassword(patchDto.NewPassword);
+
+            if (patchDto.RoleId.HasValue) existingDoctor.User.RoleId = patchDto.RoleId.Value;
+            if (patchDto.IsUserActive.HasValue) existingDoctor.User.IsActive = patchDto.IsUserActive.Value;
+
+            // ── 3. تحديث بيانات الطبيب ──
+            if (patchDto.Specialization != null) existingDoctor.Specialization = patchDto.Specialization;
+            if (patchDto.LicenseNumber != null) existingDoctor.LicenseNumber = patchDto.LicenseNumber;
+            if (patchDto.Salary.HasValue) existingDoctor.Salary = patchDto.Salary.Value;
+            if (patchDto.OfficeLocation != null) existingDoctor.OfficeLocation = patchDto.OfficeLocation;
+            if (patchDto.ExperienceYears.HasValue) existingDoctor.ExperienceYears = patchDto.ExperienceYears.Value;
+            if (patchDto.IsDoctorActive.HasValue) existingDoctor.IsActive = patchDto.IsDoctorActive.Value;
+
+            return await _context.SaveChangesAsync() > 0;
+        }
     }
 }

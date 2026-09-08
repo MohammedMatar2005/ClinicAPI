@@ -97,7 +97,7 @@ namespace ClinicAPI.Controllers
             }
 
             // تأكيد مطابقة الـ ID بالـ Route مع البيانات داخل الـ DTO
-            if (patientId != patientSaveDto.PatientId)
+            if (patientId != patientSaveDto.PatientDetails.PatientId)
             {
                 return BadRequest("Mismatched patient id between route and body.");
             }
@@ -139,6 +139,38 @@ namespace ClinicAPI.Controllers
             if (!isDeleted)
             {
                 return NotFound($"Patient with ID {patientId} not found.");
+            }
+
+            return NoContent();
+        }
+
+        /// <summary>
+        /// تعديل جزئي على بيانات مريض - أرسل فقط الحقول التي تريد تغييرها،
+        /// واترك الباقي null (أو احذفها من الـ JSON) لتبقى كما هي
+        /// </summary>
+        /// <param name="patientId">معرف المريض</param>
+        /// <param name="patchDto">الحقول المراد تعديلها فقط</param>
+        [HttpPatch("{patientId:int}", Name = "PatchPatient")]
+        [ProducesResponseType(StatusCodes.Status204NoContent)]
+        [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status404NotFound)]
+        public async Task<IActionResult> PatchPatient(int patientId, [FromBody] PatientPatchDTO patchDto)
+        {
+            if (patientId <= 0)
+            {
+                return BadRequest("Invalid patient ID.");
+            }
+
+            if (patchDto == null)
+            {
+                return BadRequest("Patch data is required.");
+            }
+
+            bool isUpdated = await _patientService.PatchPatientAsync(patientId, patchDto);
+
+            if (!isUpdated)
+            {
+                return NotFound($"No patient found with id {patientId}.");
             }
 
             return NoContent();

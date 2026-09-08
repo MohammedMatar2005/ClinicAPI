@@ -115,7 +115,7 @@ namespace ClinicAPIBusiness.Services
 
             if (!string.IsNullOrWhiteSpace(saveDto.PasswordHash))
             {
-                existingUser.PasswordHash = saveDto.PasswordHash;
+                existingUser.PasswordHash = BCrypt.Net.BCrypt.HashPassword(saveDto.PasswordHash);
             }
 
             return await _context.SaveChangesAsync() > 0;
@@ -135,7 +135,7 @@ namespace ClinicAPIBusiness.Services
 
             return await _context.SaveChangesAsync() > 0;
         }
-
+            
         public async Task<bool> DeleteUserAsync(int userId)
         {
             if (userId <= 0) return false;
