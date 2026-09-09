@@ -1,9 +1,11 @@
 ﻿using ClinicAPIBusiness.DTO.PaymentsDTOs;
 using ClinicAPIBusiness.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicAPI.Controllers
 {
+    [Authorize(Roles = "Admin")]
     [Route("api/Payments")]
     [ApiController]
     public class PaymentsController : ControllerBase

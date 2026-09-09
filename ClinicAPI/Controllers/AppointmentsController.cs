@@ -1,6 +1,8 @@
 ﻿using ClinicAPIBusiness.DTO.AppointmentsDTOs;
 using ClinicAPIBusiness.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace ClinicAPI.Controllers
 {
@@ -9,16 +11,20 @@ namespace ClinicAPI.Controllers
     public class AppointmentsController : ControllerBase
     {
         private readonly clsAppointment _appointmentService;
+        private readonly clsDoctor _doctorService;
 
-        public AppointmentsController(clsAppointment appointmentService)
+
+        public AppointmentsController(clsAppointment appointmentService, clsDoctor doctorService)
         {
             _appointmentService = appointmentService ?? throw new ArgumentNullException(nameof(appointmentService));
+            _doctorService = doctorService ?? throw new ArgumentNullException(nameof(doctorService));
         }
 
         /// <summary>
         /// جلب قائمة جميع المواعيد المسجلة في النظام
         /// </summary>
         /// <returns>قائمة بجميع المواعيد</returns>
+         [Authorize(Roles = "Admin")]
         [HttpGet("GetAll", Name = "GetAllAppointments")]
         [ProducesResponseType(typeof(List<AppointmentViewDTO>), StatusCodes.Status200OK)]
         public async Task<ActionResult<List<AppointmentViewDTO>>> GetAllAppointments()
@@ -27,15 +33,13 @@ namespace ClinicAPI.Controllers
             return Ok(appointments);
         }
 
-        /// <summary>
-        /// جلب بيانات موعد بناءً على معرفه
-        /// </summary>
-        /// <param name="appointmentId">معرف الموعد</param>
-        /// <returns>بيانات الموعد</returns>
+
+        [Authorize(Roles = "Admin, Receptionist, Doctor")]
         [HttpGet("GetById/{appointmentId:int}", Name = "GetAppointmentById")]
         [ProducesResponseType(typeof(AppointmentViewDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<AppointmentViewDTO>> GetAppointmentById(int appointmentId)
         {
             if (appointmentId <= 0)
@@ -49,6 +53,29 @@ namespace ClinicAPI.Controllers
                 return NotFound();
             }
 
+            // 1. استخراج آمن للـ UserId مع حماية من الـ Null
+            var userIdClaim = User.FindFirst("UserId")?.Value
+                ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+
+            if (!int.TryParse(userIdClaim, out int currentUserId))
+            {
+                return Unauthorized();
+            }
+
+            // 2. السماح للموظفين والـ Admin بالوصول المباشر
+            bool isStaff = User.IsInRole("Admin") || User.IsInRole("Receptionist");
+
+            // 3. فحص الملكية فقط إذا كان المستدعي طبيباً
+            if (!isStaff)
+            {
+                var doctor = await _doctorService.GetDoctorByIdAsync(appointment.DoctorId);
+
+                if (doctor == null || doctor.User == null || currentUserId != doctor.User.UserId)
+                {
+                    return Forbid();
+                }
+            }
+
             return Ok(appointment);
         }
 
@@ -57,6 +84,7 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="appointmentSaveDto">بيانات الموعد الجديد</param>
         /// <returns>معرف الموعد الجديد</returns>
+        [Authorize(Roles = "Admin")]
         [HttpPost("Create", Name = "CreateAppointment")]
         [ProducesResponseType(typeof(int), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -85,6 +113,7 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="appointmentId">معرف الموعد المراد تحديثه (من الـ Route)</param>
         /// <param name="appointmentSaveDto">بيانات الموعد المحدثة</param>
+        [Authorize(Roles = "Admin")]
         [HttpPut("{appointmentId:int}", Name = "UpdateAppointment")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -123,6 +152,7 @@ namespace ClinicAPI.Controllers
         /// إلغاء أو حذف موعد من النظام
         /// </summary>
         /// <param name="appointmentId">معرف الموعد المراد حذفه</param>
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{appointmentId:int}", Name = "DeleteAppointment")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]

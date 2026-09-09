@@ -1,9 +1,12 @@
 ﻿using ClinicAPIBusiness.DTO.UsersDTOs;
 using ClinicAPIBusiness.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace ClinicAPI.Controllers
 {
+    [Authorize(Roles = "Admin")]
     [Route("api/Users")]
     [ApiController]
     public class UserController : ControllerBase
@@ -32,10 +35,13 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="userId">معرف المستخدم</param>
         /// <returns>بيانات المستخدم</returns>
+        [Authorize(Roles = "Admin, Receptionist, Doctor")]
         [HttpGet("GetById/{userId:int}", Name = "GetUserById")]
         [ProducesResponseType(typeof(UserViewDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<UserViewDTO>> GetUserById(int userId)
         {
             if (userId <= 0)
@@ -43,10 +49,28 @@ namespace ClinicAPI.Controllers
                 return BadRequest("Invalid user ID.");
             }
 
+            // 1. استخراج الـ UserId من الـ Claim بأمان
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? User.FindFirst("UserId")?.Value;
+
+            if (!int.TryParse(userIdClaim, out int currentUserId))
+            {
+                return Unauthorized();
+            }
+
+            // 2. الآدمن يحق له الوصول لأي حساب، بينما باقي المستخدمين يصلون لحساباتهم الشخصية فقط
+            bool isAdmin = User.IsInRole("Admin");
+
+            if (!isAdmin && currentUserId != userId)
+            {
+                return Forbid();
+            }
+
+            // 3. جلب المستخدم من الـ DB فقط إذا تجاوز الفحص السريع
             var user = await _userService.GetUserByIdAsync(userId);
             if (user == null)
             {
-                return NotFound();
+                return NotFound($"User with ID {userId} not found.");
             }
 
             return Ok(user);

@@ -1,9 +1,11 @@
 ﻿using ClinicAPIBusiness.DTO.PatientVisitsDTOs;
 using ClinicAPIBusiness.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicAPI.Controllers
 {
+    [Authorize(Roles = "Admin")]
     [Route("api/PatientVisits")]
     [ApiController]
     public class PatientVisitsController : ControllerBase

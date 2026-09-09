@@ -1,5 +1,6 @@
 ﻿using ClinicAPIBusiness.Models;
 using ClinicAPIBusiness.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicAPI.Controllers
@@ -37,6 +38,7 @@ namespace ClinicAPI.Controllers
         /// تحديث إعدادات العيادة (الشعار، أوقات العمل، النسبة المئوية للضريبة، بيانات الاتصال)
         /// </summary>
         /// <param name="settings">بيانات الإعدادات المحدثة</param>
+        [Authorize(Roles = "Admin")]
         [HttpPut(Name = "UpdateClinicSettings")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]

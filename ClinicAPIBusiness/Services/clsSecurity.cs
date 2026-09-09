@@ -1,6 +1,10 @@
-﻿using System;
+﻿using Microsoft.Extensions.Configuration;
+using Microsoft.IdentityModel.Tokens;
+using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Threading.Tasks;
@@ -9,6 +13,11 @@ namespace ClinicAPIBusiness.Services
 {
     public class clsSecurity
     {
+        private readonly IConfiguration _configuration;
+        public clsSecurity(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
         public static string ComputeHash(string input)
         {
             //SHA is Secutred Hash Algorithm.
@@ -118,6 +127,41 @@ namespace ClinicAPIBusiness.Services
                 throw; // Rethrow the exception to be caught in the Main method
             }
         }
+
+
+        public async Task<string> GenerateAccessToken(int userId, string username, string roleName)
+        {
+            // 1. تحديد الـ Claims (بيانات المستخدم المضمنة داخل الـ Token)
+            var claims = new[]
+            {
+            new Claim(ClaimTypes.NameIdentifier, userId.ToString()),
+            new Claim(ClaimTypes.Name, username),
+            new Claim(ClaimTypes.Role, roleName),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString()),
+            
+        };
+
+            // 2. جلب ا`لمفتاح والإعدادات من appsettings.json
+            var secretKey = _configuration["Jwt:Key"] ?? "THIS_IS_A_VERY_SECRET_KEY_123456_VERY_LONG_KEY_32BYTES!";
+            var issuer = _configuration["Jwt:Issuer"] ?? "ClinicApi";
+            var audience = _configuration["Jwt:Audience"] ?? "ClinicApiUsers";
+
+            var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(secretKey));
+            var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
+
+            // 3. بناء كائن الـ Token
+            var token = new JwtSecurityToken(
+                issuer: issuer,
+                audience: audience,
+                claims: claims,
+                expires: DateTime.UtcNow.AddHours(2), // مدة صلاحية التوكين (مثلاً ساعتان)
+                signingCredentials: creds
+            );
+
+            // 4. تحويل التوكين إلى النص المشفر النهائي (JWT String)
+            return new JwtSecurityTokenHandler().WriteToken(token);
+        }
+
     }
 
 }

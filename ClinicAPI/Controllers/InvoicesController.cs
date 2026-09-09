@@ -1,5 +1,6 @@
 ﻿using ClinicAPIBusiness.DTO.InvoicesDTOs;
 using ClinicAPIBusiness.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicAPI.Controllers
@@ -19,6 +20,7 @@ namespace ClinicAPI.Controllers
         /// جلب قائمة جميع الفواتير المسجلة في النظام
         /// </summary>
         /// <returns>قائمة بجميع الفواتير</returns>
+        [Authorize(Roles = "Admin")]
         [HttpGet("GetAll", Name = "GetAllInvoices")]
         [ProducesResponseType(typeof(List<InvoiceViewDTO>), StatusCodes.Status200OK)]
         public async Task<ActionResult<List<InvoiceViewDTO>>> GetAllInvoices()
@@ -32,6 +34,7 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="invoiceId">معرف الفاتورة</param>
         /// <returns>بيانات الفاتورة</returns>
+        [Authorize(Roles = "Admin")]
         [HttpGet("GetById/{invoiceId:int}", Name = "GetInvoiceById")]
         [ProducesResponseType(typeof(InvoiceViewDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -57,6 +60,7 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="invoiceSaveDto">بيانات الفاتورة الجديدة</param>
         /// <returns>معرف الفاتورة الجديدة</returns>
+        [Authorize(Roles = "Admin")]
         [HttpPost("Create", Name = "CreateInvoice")]
         [ProducesResponseType(typeof(int), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -85,6 +89,7 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="invoiceId">معرف الفاتورة المراد تحديثها (من الـ Route)</param>
         /// <param name="invoiceSaveDto">بيانات الفاتورة المحدثة</param>
+        [Authorize(Roles = "Admin")]
         [HttpPut("{invoiceId:int}", Name = "UpdateInvoice")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -123,6 +128,7 @@ namespace ClinicAPI.Controllers
         /// حذف فاتورة من النظام
         /// </summary>
         /// <param name="invoiceId">معرف الفاتورة المراد حذفها</param>
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{invoiceId:int}", Name = "DeleteInvoice")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]

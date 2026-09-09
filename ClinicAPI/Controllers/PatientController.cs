@@ -1,9 +1,11 @@
 ﻿using ClinicAPIBusiness.DTO.PatientsDTOs;
 using ClinicAPIBusiness.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicAPI.Controllers
 {
+    [Authorize(Roles = "Admin")]
     [Route("api/Patients")]
     [ApiController]
     public class PatientController : ControllerBase
@@ -19,6 +21,7 @@ namespace ClinicAPI.Controllers
         /// جلب قائمة جميع المرضى المسجلين في النظام
         /// </summary>
         /// <returns>قائمة بجميع المرضى</returns>
+        
         [HttpGet("GetAll", Name = "GetAllPatients")]
         [ProducesResponseType(typeof(List<PatientViewDTO>), StatusCodes.Status200OK)]
         public async Task<ActionResult<List<PatientViewDTO>>> GetAllPatients()

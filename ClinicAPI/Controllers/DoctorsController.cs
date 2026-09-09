@@ -1,5 +1,6 @@
 ﻿using ClinicAPIBusiness.DTO.DoctorsDTOs;
 using ClinicAPIBusiness.Services;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 namespace ClinicAPI.Controllers
@@ -19,6 +20,7 @@ namespace ClinicAPI.Controllers
         /// جلب قائمة جميع الأطباء المسجلين في النظام
         /// </summary>
         /// <returns>قائمة بجميع الأطباء</returns>
+        [Authorize(Roles = "Admin")]
         [HttpGet("GetAll", Name = "GetAllDoctors")]
         [ProducesResponseType(typeof(List<DoctorViewDTO>), StatusCodes.Status200OK)]
         public async Task<ActionResult<List<DoctorViewDTO>>> GetAllDoctors()
@@ -32,6 +34,7 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="doctorId">معرف الطبيب</param>
         /// <returns>بيانات الطبيب</returns>
+        [Authorize(Roles = "Admin")]
         [HttpGet("GetById/{doctorId:int}", Name = "GetDoctorById")]
         [ProducesResponseType(typeof(DoctorViewDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -57,6 +60,7 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="doctorSaveDto">بيانات الطبيب والتخصص</param>
         /// <returns>معرف الطبيب الجديد</returns>
+        [Authorize(Roles = "Admin")]
         [HttpPost("Create", Name = "CreateDoctor")]
         [ProducesResponseType(typeof(int), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -84,6 +88,7 @@ namespace ClinicAPI.Controllers
         /// تحديث بيانات طبيب في النظام
         /// </summary>
         /// <param name="doctorId">معرف الطبيب المراد تحديثه (من الـ Route)</param>
+        [Authorize(Roles = "Admin")]
         /// <param name="doctorSaveDto">بيانات الطبيب المحدثة</param>
         [HttpPut("{doctorId:int}", Name = "UpdateDoctor")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
@@ -123,6 +128,7 @@ namespace ClinicAPI.Controllers
         /// حذف طبيب من النظام
         /// </summary>
         /// <param name="doctorId">معرف الطبيب المراد حذفه</param>
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{doctorId:int}", Name = "DeleteDoctor")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
@@ -152,6 +158,7 @@ namespace ClinicAPI.Controllers
         /// <param name="doctorId">معرف الطبيب</param>
         /// <param name="patchDto">الحقول المراد تعديلها فقط</param>
         [HttpPatch("{doctorId:int}", Name = "PatchDoctor")]
+        [Authorize(Roles = "Admin")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]

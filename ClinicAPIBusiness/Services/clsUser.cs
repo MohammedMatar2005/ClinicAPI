@@ -1,11 +1,15 @@
+using BCrypt.Net;
+using ClinicAPIBusiness.DTO.UsersDTOs;
+using ClinicAPIBusiness.Models;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
 using System;
 using System.Collections.Generic;
+using System.IdentityModel.Tokens.Jwt;
 using System.Linq;
+using System.Security.Claims;
+using System.Text;
 using System.Threading.Tasks;
-using Microsoft.EntityFrameworkCore;
-using ClinicAPIBusiness.Models;
-using ClinicAPIBusiness.DTO.UsersDTOs;
-using BCrypt.Net;
 
 namespace ClinicAPIBusiness.Services
 {
@@ -216,7 +220,8 @@ namespace ClinicAPIBusiness.Services
                     LastLoginDate = u.LastLoginDate,
                     FullName = u.Person != null
                         ? $"{u.Person.FirstName} {u.Person.SecondName ?? string.Empty} {u.Person.ThirdName ?? string.Empty} {u.Person.LastName}".Replace("   ", " ").Replace("  ", " ").Trim()
-                        : string.Empty
+                        : string.Empty,
+                    RoleName = u.Role != null ? u.Role.RoleName : "No Role",
                 }).FirstOrDefaultAsync(u => u.Username == username);
         }
 
@@ -236,6 +241,22 @@ namespace ClinicAPIBusiness.Services
 
             await _context.SaveChangesAsync();
             return true;
+        }
+
+        public async Task<bool> UpdatePasswordToHashAsync(int userId, string plainPassword)
+        {
+            if (userId <= 0 || string.IsNullOrWhiteSpace(plainPassword))
+                return false;
+
+            var user = await _context.Users.FindAsync(userId);
+            if (user == null)
+                return false;
+
+            // Hash the plain-text password using BCrypt
+            user.PasswordHash = BCrypt.Net.BCrypt.HashPassword(plainPassword);
+
+            // Persist changes directly to SQL Server
+            return await _context.SaveChangesAsync() > 0;
         }
     }
 }

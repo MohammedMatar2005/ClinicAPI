@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Claims;
 using System.Threading.Tasks;
 
 namespace ClinicAPIBusiness.Services
@@ -50,6 +51,9 @@ namespace ClinicAPIBusiness.Services
         /// </summary>
         public async Task<AppointmentDetailsDTO?> GetAppointmentByIdAsync(int id)
         {
+            
+
+
             if (id <= 0) return null;
 
             return await _context.Appointments
@@ -69,7 +73,8 @@ namespace ClinicAPIBusiness.Services
                     CreatedDate = a.CreatedDate,
                     UpdatedDate = a.UpdatedDate,
                     IsActive = a.IsActive
-                }).FirstOrDefaultAsync(a => a.AppointmentId == id);
+                })
+                .FirstOrDefaultAsync(a => a.AppointmentId == id);
         }
 
         // =========================================================================
