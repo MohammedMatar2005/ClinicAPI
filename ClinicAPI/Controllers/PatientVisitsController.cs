@@ -2,6 +2,7 @@
 using ClinicAPIBusiness.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace ClinicAPI.Controllers
 {
@@ -34,10 +35,13 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="visitId">معرف الزيارة</param>
         /// <returns>بيانات الزيارة (تشمل التشخيص والملاحظات)</returns>
+        [Authorize(Roles = "Admin, Receptionist, Doctor")]
         [HttpGet("GetById/{visitId:int}", Name = "GetPatientVisitById")]
         [ProducesResponseType(typeof(PatientVisitViewDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<PatientVisitViewDTO>> GetPatientVisitById(int visitId)
         {
             if (visitId <= 0)
@@ -48,7 +52,25 @@ namespace ClinicAPI.Controllers
             var visit = await _patientVisitService.GetPatientVisitByIdAsync(visitId);
             if (visit == null)
             {
-                return NotFound();
+                return NotFound($"Visit with ID {visitId} not found.");
+            }
+
+            // 1. استخراج الـ UserId من الـ Claim بأمان
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? User.FindFirst("UserId")?.Value;
+
+            if (!int.TryParse(userIdClaim, out int currentUserId))
+            {
+                return Unauthorized();
+            }
+
+            // 2. الآدمن والاستقبال يمكنهم مشاهدة جميع الزيارات
+            bool isStaff = User.IsInRole("Admin") || User.IsInRole("Receptionist");
+
+            // 3. الطبيب يصل للزيارات التي أريت تحت إشرافه فقط (مقارنة مباشرة في الذاكرة عبر DoctorUserId في الـ DTO)
+            if (!isStaff && visit.DoctorUserId != currentUserId)
+            {
+                return Forbid();
             }
 
             return Ok(visit);

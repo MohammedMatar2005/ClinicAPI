@@ -39,5 +39,8 @@ namespace ClinicAPIBusiness.DTO.InvoicesDTOs
         public string PatientFullName { get; set; } = string.Empty;
         public DateTime VisitDate { get; set; }
         public string? PaymentStatusName { get; set; } = string.Empty;
+
+        public int DoctorId { get; set; }
+        public int DoctorUserId { get; set; }
     }
 }

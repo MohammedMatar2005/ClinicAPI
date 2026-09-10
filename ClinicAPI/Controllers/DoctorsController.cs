@@ -2,6 +2,7 @@
 using ClinicAPIBusiness.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace ClinicAPI.Controllers
 {
@@ -34,11 +35,12 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="doctorId">معرف الطبيب</param>
         /// <returns>بيانات الطبيب</returns>
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin, Receptionist, Doctor")]
         [HttpGet("GetById/{doctorId:int}", Name = "GetDoctorById")]
         [ProducesResponseType(typeof(DoctorViewDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<DoctorViewDTO>> GetDoctorById(int doctorId)
         {
             if (doctorId <= 0)
@@ -50,6 +52,24 @@ namespace ClinicAPI.Controllers
             if (doctor == null)
             {
                 return NotFound();
+            }
+
+            // 1. استخراج الـ UserId من الـ Claim بأمان
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? User.FindFirst("UserId")?.Value;
+
+            if (!int.TryParse(userIdClaim, out int currentUserId))
+            {
+                return Unauthorized();
+            }
+
+            // 2. الآدمن والاستقبال يمكنهم رؤية جميع الأطباء
+            bool isStaff = User.IsInRole("Admin") || User.IsInRole("Receptionist");
+
+            // 3. الطبيب يصل لبياناته الشخصية فقط
+            if (!isStaff && doctor.User.UserId != currentUserId)
+            {
+                return Forbid();
             }
 
             return Ok(doctor);

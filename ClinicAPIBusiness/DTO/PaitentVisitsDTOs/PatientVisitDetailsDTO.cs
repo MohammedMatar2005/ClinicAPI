@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Runtime.InteropServices.Marshalling;
 
 namespace ClinicAPIBusiness.DTO.PatientVisitsDTOs
 {
@@ -35,5 +36,8 @@ namespace ClinicAPIBusiness.DTO.PatientVisitsDTOs
 
         // يمكنك هنا إضافة حقول مخصصة لشاشة التفاصيل فقط إذا لزم الأمر، مثل رقم الهاتف أو التخصص
         public string? DoctorSpecialty { get; set; }
+
+        public int DoctorId { get; set; }
+        public int DoctorUserId { get; set; }
     }
 }

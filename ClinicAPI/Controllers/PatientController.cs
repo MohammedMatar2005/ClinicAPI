@@ -35,10 +35,12 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="patientId">معرف المريض</param>
         /// <returns>بيانات المريض</returns>
+        [Authorize(Roles = "Admin, Receptionist, Doctor")]
         [HttpGet("GetById/{patientId:int}", Name = "GetPatientById")]
         [ProducesResponseType(typeof(PatientViewDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<ActionResult<PatientViewDTO>> GetPatientById(int patientId)
         {
             if (patientId <= 0)
@@ -49,7 +51,7 @@ namespace ClinicAPI.Controllers
             var patient = await _patientService.GetPatientByIdAsync(patientId);
             if (patient == null)
             {
-                return NotFound();
+                return NotFound($"Patient with ID {patientId} not found.");
             }
 
             return Ok(patient);

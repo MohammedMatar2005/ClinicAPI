@@ -27,7 +27,7 @@ namespace ClinicAPIBusiness.Services
         /// </summary>
         public async Task<List<InvoiceViewDTO>> GetAllInvoicesAsync()
         {
-            // 1. حساب المبالغ المتبقية في الذاكرة كما فعلت بدقة
+            // 1. حساب المبالغ المتبقية في الذاكرة
             var remainingAmounts = await _context.Invoices
                 .Select(i => new
                 {
@@ -38,12 +38,11 @@ namespace ClinicAPIBusiness.Services
                 })
                 .ToDictionaryAsync(x => x.InvoiceId, x => x.RemainingAmount);
 
-            // 2. جلب الفواتير وبناء الحالات
+            // 2. جلب الفواتير وتسطيح بيانات الطبيب والزيارة لاستعلام واحد سريع
             var invoices = await _context.Invoices
                 .AsNoTracking()
                 .Select(i => new
                 {
-                    // نجلبه كـ Anonymous Object أولاً لتسهيل دمج الحسبة الديناميكية
                     i.InvoiceId,
                     i.VisitId,
                     i.InvoiceNumber,
@@ -57,10 +56,7 @@ namespace ClinicAPIBusiness.Services
                     DiscountPercentage = i.DiscountPercentage ?? 0m,
                     DiscountAmount = i.DiscountAmount ?? 0m,
                     InvoiceStatusId = i.StatusId,
-
-                    // جلب اسم حالة الفاتورة التنظيمية مباشرة من جدول الحالات عبر الـ Navigation Property
                     StatusName = i.Status.StatusName,
-
                     DueDate = i.DueDate,
                     i.IsActive,
                     VisitDate = i.Visit.VisitDate,
@@ -68,33 +64,35 @@ namespace ClinicAPIBusiness.Services
                                       i.Visit.Appointment.Patient.Person.SecondName + " " +
                                       i.Visit.Appointment.Patient.Person.LastName,
                     SubTotal = i.SubTotal ?? 0m,
-                    FinalAmount = i.FinalAmount ?? 0m
+                    FinalAmount = i.FinalAmount ?? 0m,
+
+                    // 👈 تسطيح معرفات الطبيب لتسهيل فحص الملكية في الـ Controller
+                    DoctorId = i.Visit.Appointment.DoctorId,
+                    DoctorUserId = i.Visit.Appointment.Doctor.User.UserId
                 })
                 .ToListAsync();
 
-            // 3. تحويل البيانات إلى الـ DTO النهائي وحساب حالة الدفع بالاعتماد على الـ Dictionary
+            // 3. تحويل البيانات إلى DTO النهائي وحساب حالة الدفع
             return invoices.Select(i => {
-                // جلب المبلغ المتبقي للفاتورة الحالية
                 decimal remaining = remainingAmounts.ContainsKey(i.InvoiceId) ? remainingAmounts[i.InvoiceId] : i.FinalAmount;
 
-                // الحسبة الذكية لحالة الدفع:
                 string paymentStatusName;
                 byte paymentStatusId;
 
                 if (remaining <= 0)
                 {
                     paymentStatusName = "مدفوعة";
-                    paymentStatusId = 2; // Paid حسب السكربت السابق
+                    paymentStatusId = 2;
                 }
                 else if (remaining < i.FinalAmount)
                 {
                     paymentStatusName = "مدفوعة جزئياً";
-                    paymentStatusId = 1; // Partially Paid
+                    paymentStatusId = 1;
                 }
                 else
                 {
                     paymentStatusName = "غير مدفوعة";
-                    paymentStatusId = 0; // Unpaid
+                    paymentStatusId = 0;
                 }
 
                 return new InvoiceViewDTO
@@ -111,26 +109,24 @@ namespace ClinicAPIBusiness.Services
                     TaxAmount = i.TaxAmount,
                     DiscountPercentage = i.DiscountPercentage,
                     DiscountAmount = i.DiscountAmount,
-
-                    // حالة الفاتورة (نشطة، ملغاة)
                     InvoiceStatusId = i.InvoiceStatusId,
-                    StatusName = i.StatusName, // تأتي من الـ DB (مثل: Active, Cancelled)
-
+                    StatusName = i.StatusName,
                     DueDate = i.DueDate,
                     IsActive = i.IsActive,
                     VisitDate = i.VisitDate,
                     PatientFullName = i.PatientFullName,
                     SubTotal = i.SubTotal,
                     FinalAmount = i.FinalAmount,
-
-                    // المتبقي وحالة الدفع المحسوبة ديناميكياً بنجاح
                     RemainingAmount = remaining < 0 ? 0 : remaining,
                     PaymentStatusId = paymentStatusId,
-                    PaymentStatusName = paymentStatusName // تحتاج لإضافة هذا الحقل في الـ DTO إذا لم يكن موجوداً لعرضه بالواجهة
+                    PaymentStatusName = paymentStatusName,
+
+                    // 👈 إسناد القسائم المسطحة الجاهزة
+                    DoctorId = i.DoctorId,
+                    DoctorUserId = i.DoctorUserId
                 };
             }).ToList();
         }
-
         /// <summary>
         /// جلب فاتورة محددة بواسطة الـ ID بالتتبع لغايات البزنس أو التعديل
         /// </summary>

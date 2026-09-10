@@ -2,6 +2,7 @@
 using ClinicAPIBusiness.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace ClinicAPI.Controllers
 {
@@ -10,10 +11,17 @@ namespace ClinicAPI.Controllers
     public class InvoicesController : ControllerBase
     {
         private readonly clsInvoice _invoiceService;
+        private readonly clsDoctor _doctorService;
+        private readonly clsPatientVisit _patientVisitService;
+        private readonly clsAppointment _appointmentService;
 
-        public InvoicesController(clsInvoice invoiceService)
+        public InvoicesController(clsInvoice invoiceService, clsDoctor doctorService
+            , clsPatientVisit patientVisitService, clsAppointment appointmentService)
         {
             _invoiceService = invoiceService ?? throw new ArgumentNullException(nameof(invoiceService));
+            _doctorService = doctorService ?? throw new ArgumentNullException(nameof(doctorService));
+            _patientVisitService = patientVisitService ?? throw new ArgumentNullException(nameof(patientVisitService));
+            _appointmentService = appointmentService ?? throw new ArgumentNullException(nameof(appointmentService));
         }
 
         /// <summary>
@@ -34,11 +42,12 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="invoiceId">معرف الفاتورة</param>
         /// <returns>بيانات الفاتورة</returns>
-        [Authorize(Roles = "Admin")]
+        [Authorize(Roles = "Admin, Receptionist, Doctor")]
         [HttpGet("GetById/{invoiceId:int}", Name = "GetInvoiceById")]
         [ProducesResponseType(typeof(InvoiceViewDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<InvoiceViewDTO>> GetInvoiceById(int invoiceId)
         {
             if (invoiceId <= 0)
@@ -47,14 +56,32 @@ namespace ClinicAPI.Controllers
             }
 
             var invoice = await _invoiceService.GetInvoiceByIdAsync(invoiceId);
+
             if (invoice == null)
             {
                 return NotFound();
             }
 
+            // 1. استخراج الـ UserId من الـ Claim بأمان
+            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+                ?? User.FindFirst("UserId")?.Value;
+
+            if (!int.TryParse(userIdClaim, out int currentUserId))
+            {
+                return Unauthorized();
+            }
+
+            // 2. الآدمن والاستقبال يمكنهم مشاهدة أي فاتورة
+            bool isStaff = User.IsInRole("Admin") || User.IsInRole("Receptionist");
+
+            // 3. الطبيب يصل للفواتير المرتبطة به فقط (مقارنة مباشرة بالذاكرة بدون DB call)
+            if (!isStaff && invoice.DoctorUserId != currentUserId)
+            {
+                return Forbid();
+            }
+
             return Ok(invoice);
         }
-
         /// <summary>
         /// إنشاء فاتورة جديدة في النظام
         /// </summary>

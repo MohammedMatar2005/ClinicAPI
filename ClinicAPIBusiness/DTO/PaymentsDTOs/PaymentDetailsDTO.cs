@@ -21,5 +21,7 @@ namespace ClinicAPIBusiness.DTO.PaymentsDTOs
         public string DoctorFullName { get; set; } = string.Empty;
         public string PaymentStatusName { get; set; } = string.Empty;
         public decimal? InvoiceTotalAmount { get; set; } // إجمالي الفاتورة الأصلية للمقارنة
+
+        
     }
 }

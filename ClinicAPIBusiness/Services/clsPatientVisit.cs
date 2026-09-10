@@ -115,7 +115,9 @@ namespace ClinicAPIBusiness.Services
                         : string.Empty,
 
                     AppointmentReason = p.Appointment != null ? (p.Appointment.ReasonForVisit ?? string.Empty) : string.Empty,
-                    DoctorSpecialty = (p.Appointment != null && p.Appointment.Doctor != null) ? (p.Appointment.Doctor.Specialization ?? string.Empty) : string.Empty
+                    DoctorSpecialty = (p.Appointment != null && p.Appointment.Doctor != null) ? (p.Appointment.Doctor.Specialization ?? string.Empty) : string.Empty,
+                    DoctorId = p.Appointment.DoctorId,
+                    DoctorUserId = p.Appointment.Doctor.UserId
                 })
                 .FirstOrDefaultAsync();
         }        // =========================================================================
