@@ -35,6 +35,11 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="visitId">معرف الزيارة</param>
         /// <returns>بيانات الزيارة (تشمل التشخيص والملاحظات)</returns>
+        /// <summary>
+        /// جلب بيانات زيارة بناءً على معرفها
+        /// </summary>
+        /// <param name="visitId">معرف الزيارة</param>
+        /// <returns>بيانات الزيارة (تشمل التشخيص والملاحظات)</returns>
         [Authorize(Roles = "Admin, Receptionist, Doctor")]
         [HttpGet("GetById/{visitId:int}", Name = "GetPatientVisitById")]
         [ProducesResponseType(typeof(PatientVisitViewDTO), StatusCodes.Status200OK)]
@@ -42,7 +47,9 @@ namespace ClinicAPI.Controllers
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        public async Task<ActionResult<PatientVisitViewDTO>> GetPatientVisitById(int visitId)
+        public async Task<ActionResult<PatientVisitViewDTO>> GetPatientVisitById(
+            int visitId,
+            [FromServices] IAuthorizationService authorizationService)
         {
             if (visitId <= 0)
             {
@@ -55,22 +62,15 @@ namespace ClinicAPI.Controllers
                 return NotFound($"Visit with ID {visitId} not found.");
             }
 
-            // 1. استخراج الـ UserId من الـ Claim بأمان
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                ?? User.FindFirst("UserId")?.Value;
+            // تفويض مهمة فحص الصلاحية والملكية بالكامل لـ Policy
+            var authResult = await authorizationService.AuthorizeAsync(
+                User,
+                visit,
+                "CanAccessPatientVisit");
 
-            if (!int.TryParse(userIdClaim, out int currentUserId))
+            if (!authResult.Succeeded)
             {
-                return Unauthorized();
-            }
-
-            // 2. الآدمن والاستقبال يمكنهم مشاهدة جميع الزيارات
-            bool isStaff = User.IsInRole("Admin") || User.IsInRole("Receptionist");
-
-            // 3. الطبيب يصل للزيارات التي أريت تحت إشرافه فقط (مقارنة مباشرة في الذاكرة عبر DoctorUserId في الـ DTO)
-            if (!isStaff && visit.DoctorUserId != currentUserId)
-            {
-                return Forbid();
+                return Forbid(); // 403 Forbidden
             }
 
             return Ok(visit);

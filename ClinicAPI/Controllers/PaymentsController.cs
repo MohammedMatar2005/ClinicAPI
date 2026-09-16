@@ -34,11 +34,16 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="paymentId">معرف عملية الدفع</param>
         /// <returns>بيانات الدفع</returns>
+        [Authorize(Roles = "Admin, Manager, Doctor")] // السماح للأدوار المخولة بالدخول مبدئياً
         [HttpGet("GetById/{paymentId:int}", Name = "GetPaymentById")]
         [ProducesResponseType(typeof(PaymentViewDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
-        public async Task<ActionResult<PaymentViewDTO>> GetPaymentById(int paymentId)
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
+        public async Task<ActionResult<PaymentViewDTO>> GetPaymentById(
+            int paymentId,
+            [FromServices] IAuthorizationService authorizationService)
         {
             if (paymentId <= 0)
             {
@@ -51,9 +56,19 @@ namespace ClinicAPI.Controllers
                 return NotFound();
             }
 
+            // فحص الصلاحية والملكية عبر الـ Policy التي قمنا بإنشائها
+            var authResult = await authorizationService.AuthorizeAsync(
+                User,
+                payment,
+                "CanAccessPayment");
+
+            if (!authResult.Succeeded)
+            {
+                return Forbid(); // ترجع 403 Forbidden في حال لم تحقّق الشرط (مثل أن الطبيب ليس له علاقة بهذه الدفعة)
+            }
+
             return Ok(payment);
         }
-
         /// <summary>
         /// تسجيل عملية دفع جديدة في النظام
         /// </summary>

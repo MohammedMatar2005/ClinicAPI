@@ -36,21 +36,22 @@ namespace ClinicAPI.Controllers
         /// <param name="userId">معرف المستخدم</param>
         /// <returns>بيانات المستخدم</returns>
         // 1. السماح لكافة الأدوار بالدخول، وفحص الملكية يتم بالداخل
-        [Authorize(Roles = "Admin, Doctor, Receptionist, Nurse, Manager")]
+        [Authorize] // يمكنك إزالة الأدوار المباشرة لأن Policy ستتولى التحقق
         [HttpGet("GetById/{userId:int}", Name = "GetUserById")]
-        public async Task<ActionResult<UserViewDTO>> GetUserById(int userId)
+        public async Task<ActionResult<UserViewDTO>> GetUserById(
+         int userId,
+         [FromServices] IAuthorizationService authorizationService)
         {
             if (userId <= 0) return BadRequest("Invalid user ID.");
 
-            // استخراج الهوية
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                              ?? User.FindFirst("UserId")?.Value;
+            // التحقق عبر الـ Policy التي قمت بإنشائها مسبقاً (ClinicOwnerOrAdmin) 
+            // ونمرر الـ userId كـ Resource للـ Handler لكي يفحص هل هو نفسه المستخدم أو Admin/Manager
+            var authResult = await authorizationService.AuthorizeAsync(
+                User,
+                userId,
+                "ClinicOwnerOrAdmin");
 
-            if (!int.TryParse(userIdClaim, out int currentUserId)) return Unauthorized();
-
-            // فحص الإدارة مقابل فحص الملكية
-            bool isManagerial = User.IsInRole("Admin") || User.IsInRole("Manager");
-            if (!isManagerial && currentUserId != userId)
+            if (!authResult.Succeeded)
             {
                 return Forbid(); // 403 Forbidden
             }
@@ -58,6 +59,8 @@ namespace ClinicAPI.Controllers
             var user = await _userService.GetUserByIdAsync(userId);
             return user == null ? NotFound() : Ok(user);
         }
+
+
 
         /// <summary>
         /// إنشاء مستخدم جديد في النظام

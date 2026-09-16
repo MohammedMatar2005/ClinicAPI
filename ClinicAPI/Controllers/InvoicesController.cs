@@ -37,18 +37,15 @@ namespace ClinicAPI.Controllers
             return Ok(invoices);
         }
 
-        /// <summary>
-        /// جلب بيانات فاتورة بناءً على معرفها
-        /// </summary>
-        /// <param name="invoiceId">معرف الفاتورة</param>
-        /// <returns>بيانات الفاتورة</returns>
         [Authorize(Roles = "Admin, Receptionist, Doctor")]
         [HttpGet("GetById/{invoiceId:int}", Name = "GetInvoiceById")]
         [ProducesResponseType(typeof(InvoiceViewDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        public async Task<ActionResult<InvoiceViewDTO>> GetInvoiceById(int invoiceId)
+        public async Task<ActionResult<InvoiceViewDTO>> GetInvoiceById(
+          int invoiceId,
+          [FromServices] IAuthorizationService authorizationService)
         {
             if (invoiceId <= 0)
             {
@@ -62,22 +59,15 @@ namespace ClinicAPI.Controllers
                 return NotFound();
             }
 
-            // 1. استخراج الـ UserId من الـ Claim بأمان
-            var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                ?? User.FindFirst("UserId")?.Value;
+            // تمرير الفاتورة (Resource) للـ Policy للتأكد من الصلاحية
+            var authResult = await authorizationService.AuthorizeAsync(
+                User,
+                invoice,
+                "CanAccessInvoice");
 
-            if (!int.TryParse(userIdClaim, out int currentUserId))
+            if (!authResult.Succeeded)
             {
-                return Unauthorized();
-            }
-
-            // 2. الآدمن والاستقبال يمكنهم مشاهدة أي فاتورة
-            bool isStaff = User.IsInRole("Admin") || User.IsInRole("Receptionist");
-
-            // 3. الطبيب يصل للفواتير المرتبطة به فقط (مقارنة مباشرة بالذاكرة بدون DB call)
-            if (!isStaff && invoice.DoctorUserId != currentUserId)
-            {
-                return Forbid();
+                return Forbid(); // 403 Forbidden
             }
 
             return Ok(invoice);

@@ -35,6 +35,11 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="doctorId">معرف الطبيب</param>
         /// <returns>بيانات الطبيب</returns>
+        /// <summary>
+        /// جلب بيانات طبيب بناءً على معرفه
+        /// </summary>
+        /// <param name="doctorId">معرف الطبيب</param>
+        /// <returns>بيانات الطبيب</returns>
         [Authorize(Roles = "Admin, Doctor, Receptionist, Nurse, Manager")]
         [HttpGet("GetById/{doctorId:int}", Name = "GetDoctorById")]
         [ProducesResponseType(typeof(DoctorViewDTO), StatusCodes.Status200OK)]
@@ -42,7 +47,9 @@ namespace ClinicAPI.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
-        public async Task<ActionResult<DoctorViewDTO>> GetDoctorById(int doctorId)
+        public async Task<ActionResult<DoctorViewDTO>> GetDoctorById(
+            int doctorId,
+            [FromServices] IAuthorizationService authorizationService)
         {
             // 1. التحقق من صحة المعرّف الممرر في المسار
             if (doctorId <= 0)
@@ -50,40 +57,25 @@ namespace ClinicAPI.Controllers
                 return BadRequest("Invalid doctor ID.");
             }
 
-            // 2. استخراج ID المستخدم الحالي من الـ JWT Claims بأمان
-            var userIdClaim = User.FindFirst("UserId")?.Value
-                ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
-
-            if (!int.TryParse(userIdClaim, out int currentUserId))
-            {
-                return Unauthorized();
-            }
-
-            // 3. تحديد الصلاحية التجاوزية للطاقم الإداري والمساند (Management & Support Staff Bypass):
-            // الاداريين، الاستقبال والممرضين يحق لهم الاطلاع على بيانات كافة الأطباء لتنسيق العمل
-            bool isAdministrativeOrSupportStaff = User.IsInRole("Admin")
-                                                  || User.IsInRole("Manager")
-                                                  || User.IsInRole("Receptionist")
-                                                  || User.IsInRole("Nurse");
-
-            // 4. جلب بيانات الطبيب من قاعدة البيانات
+            // 2. جلب بيانات الطبيب من قاعدة البيانات أولاً
             var doctor = await _doctorService.GetDoctorByIdAsync(doctorId);
             if (doctor == null)
             {
                 return NotFound($"Doctor with ID {doctorId} not found.");
             }
 
-            // 5. تطبيق فحص الملكية (Ownership Check):
-            // إذا كان المستدعي طبيباً (وليس ضمن الطاقم الإداري)، يُسمح له فقط بقراءة ملفه الشخصي
-            if (!isAdministrativeOrSupportStaff)
+            // 3. التحقق من الصلاحيات والملكية عبر الـ Policy (تمرير الطبيب كـ Resource)
+            var authResult = await authorizationService.AuthorizeAsync(
+                User,
+                doctor,
+                "CanAccessDoctor");
+
+            if (!authResult.Succeeded)
             {
-                // حماية من الـ Null في حال عدم ربط الطبيب بـ User في قاعدة البيانات
-                if (doctor.User == null || doctor.User.UserId != currentUserId)
-                {
-                    return Forbid(); // HTTP 403 Forbidden
-                }
+                return Forbid(); // HTTP 403 Forbidden
             }
 
+            // 4. إرجاع بيانات الطبيب عند اجتياز الفحوصات
             return Ok(doctor);
         }
         /// <summary>
