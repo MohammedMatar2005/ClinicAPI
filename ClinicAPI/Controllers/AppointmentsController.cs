@@ -34,26 +34,29 @@ namespace ClinicAPI.Controllers
         }
 
 
-        [Authorize(Roles = "Admin, Receptionist, Doctor")]
+        [Authorize(Roles = "Admin, Doctor, Receptionist, Nurse, Manager")]
         [HttpGet("GetById/{appointmentId:int}", Name = "GetAppointmentById")]
         [ProducesResponseType(typeof(AppointmentViewDTO), StatusCodes.Status200OK)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
         [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<AppointmentViewDTO>> GetAppointmentById(int appointmentId)
         {
+            // 1. التحقق من صحة المعرّف الممرر في المسار
             if (appointmentId <= 0)
             {
                 return BadRequest("Invalid appointment ID.");
             }
 
+            // 2. البحث عن الموعد المطلوب في قاعدة البيانات
             var appointment = await _appointmentService.GetAppointmentByIdAsync(appointmentId);
             if (appointment == null)
             {
-                return NotFound();
+                return NotFound("Appointment not found.");
             }
 
-            // 1. استخراج آمن للـ UserId مع حماية من الـ Null
+            // 3. استخراج ID المستخدم الحالي من الـ JWT Claims بأمان
             var userIdClaim = User.FindFirst("UserId")?.Value
                 ?? User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
 
@@ -62,20 +65,27 @@ namespace ClinicAPI.Controllers
                 return Unauthorized();
             }
 
-            // 2. السماح للموظفين والـ Admin بالوصول المباشر
-            bool isStaff = User.IsInRole("Admin") || User.IsInRole("Receptionist");
+            // 4. تحديد ما إذا كان المستخدم من ضمن الطاقم الإداري/المساند (Admin, Manager, Receptionist, Nurse)
+            // الطاقم الإداري يملك صلاحية الوصول لجميع المواعيد
+            bool isAdministrativeStaff = User.IsInRole("Admin")
+                                         || User.IsInRole("Manager")
+                                         || User.IsInRole("Receptionist")
+                                         || User.IsInRole("Nurse");
 
-            // 3. فحص الملكية فقط إذا كان المستدعي طبيباً
-            if (!isStaff)
+            // 5. تطبيق فحص الملكية (Ownership Check):
+            // إذا لم يكن المستخدم إدارياً وكان دوره "طبيب" (Doctor)، يتم التحقق من أن الموعد يخصه هو فقط
+            if (!isAdministrativeStaff)
             {
                 var doctor = await _doctorService.GetDoctorByIdAsync(appointment.DoctorId);
 
-                if (doctor == null || doctor.User == null || currentUserId != doctor.User.UserId)
+                // إذا لم يتم العثور على الطبيب أو كان الموعد لا يتبع للطبيب الحالي، يُرفض الطلب بـ 403 Forbidden
+                if (doctor == null || doctor.User == null || doctor.User.UserId != currentUserId)
                 {
                     return Forbid();
                 }
             }
 
+            // 6. عند اجتياز كافة الفحوصات يتم إرجاع بيانات الموعد
             return Ok(appointment);
         }
 

@@ -35,45 +35,28 @@ namespace ClinicAPI.Controllers
         /// </summary>
         /// <param name="userId">معرف المستخدم</param>
         /// <returns>بيانات المستخدم</returns>
-        [Authorize(Roles = "Admin, Receptionist, Doctor")]
+        // 1. السماح لكافة الأدوار بالدخول، وفحص الملكية يتم بالداخل
+        [Authorize(Roles = "Admin, Doctor, Receptionist, Nurse, Manager")]
         [HttpGet("GetById/{userId:int}", Name = "GetUserById")]
-        [ProducesResponseType(typeof(UserViewDTO), StatusCodes.Status200OK)]
-        [ProducesResponseType(StatusCodes.Status400BadRequest)]
-        [ProducesResponseType(StatusCodes.Status404NotFound)]
-        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
-        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<UserViewDTO>> GetUserById(int userId)
         {
-            if (userId <= 0)
-            {
-                return BadRequest("Invalid user ID.");
-            }
+            if (userId <= 0) return BadRequest("Invalid user ID.");
 
-            // 1. استخراج الـ UserId من الـ Claim بأمان
+            // استخراج الهوية
             var userIdClaim = User.FindFirst(ClaimTypes.NameIdentifier)?.Value
-                ?? User.FindFirst("UserId")?.Value;
+                              ?? User.FindFirst("UserId")?.Value;
 
-            if (!int.TryParse(userIdClaim, out int currentUserId))
+            if (!int.TryParse(userIdClaim, out int currentUserId)) return Unauthorized();
+
+            // فحص الإدارة مقابل فحص الملكية
+            bool isManagerial = User.IsInRole("Admin") || User.IsInRole("Manager");
+            if (!isManagerial && currentUserId != userId)
             {
-                return Unauthorized();
+                return Forbid(); // 403 Forbidden
             }
 
-            // 2. الآدمن يحق له الوصول لأي حساب، بينما باقي المستخدمين يصلون لحساباتهم الشخصية فقط
-            bool isAdmin = User.IsInRole("Admin");
-
-            if (!isAdmin && currentUserId != userId)
-            {
-                return Forbid();
-            }
-
-            // 3. جلب المستخدم من الـ DB فقط إذا تجاوز الفحص السريع
             var user = await _userService.GetUserByIdAsync(userId);
-            if (user == null)
-            {
-                return NotFound($"User with ID {userId} not found.");
-            }
-
-            return Ok(user);
+            return user == null ? NotFound() : Ok(user);
         }
 
         /// <summary>
