@@ -1,11 +1,15 @@
 ﻿using ClinicAPIBusiness.Models;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using System.Security.Claims;
 using System.Text;
 using System.Text.Json.Serialization;
+using System.Threading.RateLimiting;
+
 
 
 var builder = WebApplication.CreateBuilder(args);
@@ -54,6 +58,8 @@ builder.Services.AddSwaggerGen(options =>
         Description = "Enter: Bearer {your JWT token}"
     });
 
+    
+
 
     // ===============================
     // 2) Require the Bearer scheme for secured endpoints
@@ -100,6 +106,27 @@ var jwtIssuer = builder.Configuration["Jwt:Issuer"];
 var jwtAudience = builder.Configuration["Jwt:Audience"];
 
 
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+
+    options.AddPolicy("AuthLimiter", httpContext =>
+    {
+        var ip = httpContext.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+
+        return RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: ip,
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0
+            });
+    });
+});
+
+
+
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
@@ -135,6 +162,9 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     });
 
 
+
+
+
 // Database Context
 builder.Services.AddDbContext<ClinicManagementSystemContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -155,43 +185,32 @@ builder.Services.AddScoped<ClinicAPIBusiness.Services.clsPrescription>();
 builder.Services.AddScoped<ClinicAPIBusiness.Services.clsSecurity>();
 builder.Services.AddScoped<ClinicAPIBusiness.Services.clsUserRole>();
 
-
-builder.Services.AddSingleton<IAuthorizationHandler, ClinicOwnerOrAdminHandler>();
-builder.Services.AddAuthorization(options =>
-{
+// تم التعديل هنا إلى AddTransient بدلاً من AddSingleton لتجنب مشكلة الـ Captive Dependency
+builder.Services.AddTransient<IAuthorizationHandler, ClinicOwnerOrAdminHandler>();
+builder.Services.AddAuthorization(options => {
     options.AddPolicy("ClinicOwnerOrAdmin", policy =>
         policy.Requirements.Add(new ClinicOwnerOrAdminRequirement()));
 });
-
-
-
-builder.Services.AddSingleton<IAuthorizationHandler, AppointmentAccessHandler>();
-builder.Services.AddAuthorization(options =>
-{
+    
+builder.Services.AddTransient<IAuthorizationHandler, AppointmentAccessHandler>();
+builder.Services.AddAuthorization(options => {
     options.AddPolicy("CanAccessAppointment", policy =>
         policy.Requirements.Add(new AppointmentAccessRequirement()));
 });
 
-
-builder.Services.AddSingleton<IAuthorizationHandler, InvoiceAccessHandler>();
-builder.Services.AddAuthorization(options =>
-{
+builder.Services.AddTransient<IAuthorizationHandler, InvoiceAccessHandler>();
+builder.Services.AddAuthorization(options => {
     options.AddPolicy("CanAccessInvoice", policy =>
         policy.Requirements.Add(new InvoiceAccessRequirement()));
 });
 
-builder.Services.AddSingleton<IAuthorizationHandler, DoctorAccessHandler>();
-
-builder.Services.AddAuthorization(options =>
-{
+builder.Services.AddTransient<IAuthorizationHandler, DoctorAccessHandler>();
+builder.Services.AddAuthorization(options => {
     options.AddPolicy("CanAccessDoctor", policy =>
         policy.Requirements.Add(new DoctorAccessRequirement()));
 });
 
-
-
 var app = builder.Build();
-
 // Configure HTTP Request Pipeline
 if (app.Environment.IsDevelopment())
 {
@@ -207,6 +226,8 @@ else
 // 🛡️ Basic Shield: HTTPS Redirection
 app.UseHttpsRedirection();
 
+app.UseRateLimiter();
+
 // 🛡️ Basic Shield: CORS (Must be placed before UseAuthorization)
 app.UseCors(clinicCorsPolicy);
 
@@ -215,6 +236,31 @@ app.UseAuthentication();
 
 
 app.UseAuthorization();
+
+
+app.Use(async (context, next) =>
+{
+    await next();
+
+
+    if (context.Response.StatusCode == StatusCodes.Status403Forbidden)
+    {
+        var userId = context.User.FindFirstValue(ClaimTypes.NameIdentifier) ?? "anonymous";
+        var ip = context.Connection.RemoteIpAddress?.ToString() ?? "unknown";
+        var path = context.Request.Path.ToString();
+
+
+        // ✅ Centralized security log for authorization abuse
+        app.Logger.LogWarning(
+            "Forbidden access. UserId={UserId}, Path={Path}, IP={IP}",
+            userId,
+            path,
+            ip
+        );
+    }
+});
+
+
 
 app.MapControllers().RequireAuthorization();
 

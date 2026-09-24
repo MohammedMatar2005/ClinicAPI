@@ -2,6 +2,7 @@
 using ClinicAPIBusiness.Services;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace ClinicAPI.Controllers
 {
@@ -11,21 +12,28 @@ namespace ClinicAPI.Controllers
     public class PatientController : ControllerBase
     {
         private readonly clsPatient _patientService;
+        private readonly ILogger<PatientController> _logger;
 
-        public PatientController(clsPatient patientService)
+        public PatientController(clsPatient patientService, ILogger<PatientController> logger)
         {
             _patientService = patientService ?? throw new ArgumentNullException(nameof(patientService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         /// <summary>
         /// جلب قائمة جميع المرضى المسجلين في النظام
         /// </summary>
-        /// <returns>قائمة بجميع المرضى</returns>
-        
         [HttpGet("GetAll", Name = "GetAllPatients")]
         [ProducesResponseType(typeof(List<PatientViewDTO>), StatusCodes.Status200OK)]
         public async Task<ActionResult<List<PatientViewDTO>>> GetAllPatients()
         {
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+
+            _logger.LogInformation(
+                "Audit: Admin action executed. AdminId={AdminId}, Action={Action}, TargetType={TargetType}, IpAddress={IpAddress}",
+                adminId, "GetAllPatients", "PatientList", ipAddress);
+
             var patients = await _patientService.GetAllPatientsAsync();
             return Ok(patients);
         }
@@ -33,8 +41,6 @@ namespace ClinicAPI.Controllers
         /// <summary>
         /// جلب بيانات مريض بناءً على معرفه
         /// </summary>
-        /// <param name="patientId">معرف المريض</param>
-        /// <returns>بيانات المريض</returns>
         [Authorize(Roles = "Admin, Receptionist, Doctor")]
         [HttpGet("GetById/{patientId:int}", Name = "GetPatientById")]
         [ProducesResponseType(typeof(PatientViewDTO), StatusCodes.Status200OK)]
@@ -43,14 +49,23 @@ namespace ClinicAPI.Controllers
         [ProducesResponseType(StatusCodes.Status401Unauthorized)]
         public async Task<ActionResult<PatientViewDTO>> GetPatientById(int patientId)
         {
+            var userId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+
             if (patientId <= 0)
             {
+                _logger.LogWarning(
+                    "Audit: Get patient failed (Invalid ID). UserId={UserId}, TargetId={TargetId}, Action={Action}, IpAddress={IpAddress}",
+                    userId, patientId, "GetPatientById", ipAddress);
                 return BadRequest("Invalid patient ID.");
             }
 
             var patient = await _patientService.GetPatientByIdAsync(patientId);
             if (patient == null)
             {
+                _logger.LogWarning(
+                    "Audit: Get patient failed (Not Found). UserId={UserId}, TargetId={TargetId}, Action={Action}, IpAddress={IpAddress}",
+                    userId, patientId, "GetPatientById", ipAddress);
                 return NotFound($"Patient with ID {patientId} not found.");
             }
 
@@ -60,15 +75,22 @@ namespace ClinicAPI.Controllers
         /// <summary>
         /// إضافة مريض جديد في النظام
         /// </summary>
-        /// <param name="patientSaveDto">بيانات المريض الشخصية والطبية</param>
-        /// <returns>معرف المريض الجديد</returns>
+        [Authorize(Roles = "Admin")]
         [HttpPost("Create", Name = "CreatePatient")]
         [ProducesResponseType(typeof(int), StatusCodes.Status201Created)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<ActionResult<int>> CreatePatient([FromBody] PatientSaveDTO patientSaveDto)
         {
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+
             if (patientSaveDto == null)
             {
+                _logger.LogWarning(
+                    "Audit: Create patient failed (Data is null). AdminId={AdminId}, Action={Action}, IpAddress={IpAddress}",
+                    adminId, "CreatePatient", ipAddress);
                 return BadRequest("Patient data is required.");
             }
 
@@ -76,11 +98,17 @@ namespace ClinicAPI.Controllers
             {
                 int newPatientId = await _patientService.AddNewPatientAsync(patientSaveDto);
 
+                _logger.LogInformation(
+                    "Audit: Admin action executed successfully. AdminId={AdminId}, Action={Action}, TargetId={TargetId}, TargetType={TargetType}, IpAddress={IpAddress}",
+                    adminId, "CreatePatient", newPatientId, "Patient", ipAddress);
+
                 return CreatedAtRoute("GetPatientById", new { patientId = newPatientId }, newPatientId);
             }
             catch (ArgumentException ex)
             {
-                // بزنس فاليديشن فشل (مثل رقم هوية مكرر أو تاريخ غير صالح)
+                _logger.LogWarning(ex,
+                    "Audit: Create patient failed (Validation Error). AdminId={AdminId}, Action={Action}, ErrorMessage={Message}, IpAddress={IpAddress}",
+                    adminId, "CreatePatient", ex.Message, ipAddress);
                 return BadRequest(ex.Message);
             }
         }
@@ -88,14 +116,18 @@ namespace ClinicAPI.Controllers
         /// <summary>
         /// تحديث بيانات مريض في النظام
         /// </summary>
-        /// <param name="patientId">معرف المريض المراد تحديثه (من الـ Route)</param>
-        /// <param name="patientSaveDto">بيانات المريض المحدثة</param>
+        [Authorize(Roles = "Admin")]
         [HttpPut("{patientId:int}", Name = "UpdatePatient")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<IActionResult> UpdatePatient(int patientId, [FromBody] PatientSaveDTO patientSaveDto)
         {
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+
             if (patientSaveDto == null)
             {
                 return BadRequest("Patient data is required.");
@@ -104,6 +136,9 @@ namespace ClinicAPI.Controllers
             // تأكيد مطابقة الـ ID بالـ Route مع البيانات داخل الـ DTO
             if (patientId != patientSaveDto.PatientDetails.PatientId)
             {
+                _logger.LogWarning(
+                    "Audit: Update patient failed (ID Mismatch). AdminId={AdminId}, TargetId={TargetId}, Action={Action}, IpAddress={IpAddress}",
+                    adminId, patientId, "UpdatePatient", ipAddress);
                 return BadRequest("Mismatched patient id between route and body.");
             }
 
@@ -113,13 +148,23 @@ namespace ClinicAPI.Controllers
 
                 if (!isUpdated)
                 {
+                    _logger.LogWarning(
+                        "Audit: Update patient failed (Not Found). AdminId={AdminId}, TargetId={TargetId}, Action={Action}, IpAddress={IpAddress}",
+                        adminId, patientId, "UpdatePatient", ipAddress);
                     return NotFound($"No patient found with id {patientId}.");
                 }
+
+                _logger.LogInformation(
+                    "Audit: Admin action executed successfully. AdminId={AdminId}, Action={Action}, TargetId={TargetId}, TargetType={TargetType}, IpAddress={IpAddress}",
+                    adminId, "UpdatePatient", patientId, "Patient", ipAddress);
 
                 return NoContent();
             }
             catch (ArgumentException ex)
             {
+                _logger.LogWarning(ex,
+                    "Audit: Update patient failed (Validation Error). AdminId={AdminId}, Action={Action}, ErrorMessage={Message}, IpAddress={IpAddress}",
+                    adminId, patientId, "UpdatePatient", ex.Message, ipAddress);
                 return BadRequest(ex.Message);
             }
         }
@@ -127,15 +172,23 @@ namespace ClinicAPI.Controllers
         /// <summary>
         /// حذف مريض من النظام
         /// </summary>
-        /// <param name="patientId">معرف المريض المراد حذفه</param>
+        [Authorize(Roles = "Admin")]
         [HttpDelete("{patientId:int}", Name = "DeletePatient")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<IActionResult> DeletePatient(int patientId)
         {
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+
             if (patientId <= 0)
             {
+                _logger.LogWarning(
+                    "Audit: Delete patient failed (Invalid ID). AdminId={AdminId}, TargetId={TargetId}, Action={Action}, IpAddress={IpAddress}",
+                    adminId, patientId, "DeletePatient", ipAddress);
                 return BadRequest("Invalid patient ID.");
             }
 
@@ -143,31 +196,47 @@ namespace ClinicAPI.Controllers
 
             if (!isDeleted)
             {
+                _logger.LogWarning(
+                    "Audit: Delete patient failed (Not Found). AdminId={AdminId}, TargetId={TargetId}, Action={Action}, IpAddress={IpAddress}",
+                    adminId, patientId, "DeletePatient", ipAddress);
                 return NotFound($"Patient with ID {patientId} not found.");
             }
+
+            _logger.LogInformation(
+                "Audit: Admin action executed successfully. AdminId={AdminId}, Action={Action}, TargetId={TargetId}, TargetType={TargetType}, IpAddress={IpAddress}",
+                adminId, "DeletePatient", patientId, "Patient", ipAddress);
 
             return NoContent();
         }
 
         /// <summary>
-        /// تعديل جزئي على بيانات مريض - أرسل فقط الحقول التي تريد تغييرها،
-        /// واترك الباقي null (أو احذفها من الـ JSON) لتبقى كما هي
+        /// تعديل جزئي على بيانات مريض
         /// </summary>
-        /// <param name="patientId">معرف المريض</param>
-        /// <param name="patchDto">الحقول المراد تعديلها فقط</param>
         [HttpPatch("{patientId:int}", Name = "PatchPatient")]
+        [Authorize(Roles = "Admin")]
         [ProducesResponseType(StatusCodes.Status204NoContent)]
         [ProducesResponseType(StatusCodes.Status400BadRequest)]
         [ProducesResponseType(StatusCodes.Status404NotFound)]
+        [ProducesResponseType(StatusCodes.Status401Unauthorized)]
+        [ProducesResponseType(StatusCodes.Status403Forbidden)]
         public async Task<IActionResult> PatchPatient(int patientId, [FromBody] PatientPatchDTO patchDto)
         {
+            var adminId = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            var ipAddress = HttpContext.Connection.RemoteIpAddress?.ToString();
+
             if (patientId <= 0)
             {
+                _logger.LogWarning(
+                    "Audit: Patch patient failed (Invalid ID). AdminId={AdminId}, TargetId={TargetId}, Action={Action}, IpAddress={IpAddress}",
+                    adminId, patientId, "PatchPatient", ipAddress);
                 return BadRequest("Invalid patient ID.");
             }
 
             if (patchDto == null)
             {
+                _logger.LogWarning(
+                    "Audit: Patch patient failed (Data is null). AdminId={AdminId}, TargetId={TargetId}, Action={Action}, IpAddress={IpAddress}",
+                    adminId, patientId, "PatchPatient", ipAddress);
                 return BadRequest("Patch data is required.");
             }
 
@@ -175,8 +244,15 @@ namespace ClinicAPI.Controllers
 
             if (!isUpdated)
             {
+                _logger.LogWarning(
+                    "Audit: Patch patient failed (Not Found). AdminId={AdminId}, TargetId={TargetId}, Action={Action}, IpAddress={IpAddress}",
+                    adminId, patientId, "PatchPatient", ipAddress);
                 return NotFound($"No patient found with id {patientId}.");
             }
+
+            _logger.LogInformation(
+                "Audit: Admin action executed successfully. AdminId={AdminId}, Action={Action}, TargetId={TargetId}, TargetType={TargetType}, IpAddress={IpAddress}",
+                adminId, "PatchPatient", patientId, "Patient", ipAddress);
 
             return NoContent();
         }

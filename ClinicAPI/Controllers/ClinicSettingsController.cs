@@ -10,10 +10,12 @@ namespace ClinicAPI.Controllers
     public class ClinicSettingsController : ControllerBase
     {
         private readonly clsClinicSettings _settingsService;
+        private readonly ILogger<ClinicSettingsController> _logger;
 
-        public ClinicSettingsController(clsClinicSettings settingsService)
+        public ClinicSettingsController(clsClinicSettings settingsService, ILogger<ClinicSettingsController> logger)
         {
             _settingsService = settingsService ?? throw new ArgumentNullException(nameof(settingsService));
+            _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
         /// <summary>
@@ -56,13 +58,16 @@ namespace ClinicAPI.Controllers
 
                 if (!isUpdated)
                 {
+                    _logger.LogWarning("Clinic settings record could not be updated or does not exist.");
                     return NotFound("Clinic settings record could not be updated or does not exist.");
                 }
 
+                _logger.LogInformation("Clinic settings updated successfully.");
                 return NoContent();
             }
             catch (ArgumentException ex)
             {
+                _logger.LogWarning(ex, "Failed to update clinic settings due to business validation error: {Message}", ex.Message);
                 return BadRequest(ex.Message);
             }
         }

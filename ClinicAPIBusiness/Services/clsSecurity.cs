@@ -154,7 +154,7 @@ namespace ClinicAPIBusiness.Services
                 issuer: issuer,
                 audience: audience,
                 claims: claims,
-                expires: DateTime.UtcNow.AddHours(2), // مدة صلاحية التوكين (مثلاً ساعتان)
+                expires: DateTime.UtcNow.AddSeconds(60), // مدة صلاحية التوكين (مثلاً ساعتان)
                 signingCredentials: creds
             );
 

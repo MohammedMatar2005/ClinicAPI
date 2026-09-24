@@ -1,4 +1,4 @@
-﻿namespace ClinicAPIBusiness.DTO.UsersDTOs
+﻿namespace ClinicAPIBusiness.DTO.Auth
 {
     public class LoginRequestDTO
     {

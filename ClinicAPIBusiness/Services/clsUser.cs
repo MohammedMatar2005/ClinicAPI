@@ -222,6 +222,9 @@ namespace ClinicAPIBusiness.Services
                         ? $"{u.Person.FirstName} {u.Person.SecondName ?? string.Empty} {u.Person.ThirdName ?? string.Empty} {u.Person.LastName}".Replace("   ", " ").Replace("  ", " ").Trim()
                         : string.Empty,
                     RoleName = u.Role != null ? u.Role.RoleName : "No Role",
+                    RefreshTokenHash = u.RefreshTokenHash,
+                    RefreshTokenExpiresAt = u.RefreshTokenExpiresAt,
+                    RefreshTokenRevokedAt = u.RefreshTokenRevokedAt
                 }).FirstOrDefaultAsync(u => u.Username == username);
         }
 
@@ -257,6 +260,23 @@ namespace ClinicAPIBusiness.Services
 
             // Persist changes directly to SQL Server
             return await _context.SaveChangesAsync() > 0;
+        }
+
+        public async Task UpdateUserRefreshTokenAsync(UserDetailsDTO user)
+        {
+            // 1. جلب الكيان الفعلي من الداتابيز باستخدام الـ ID الخاص بالمستخدم
+            var existingUser = await _context.Users.FindAsync(user.UserId); // أو جلب الكيان بالطريقة المعتمدة في طبقة الـ Data Access لديك
+
+            if (existingUser != null)
+            {
+                // 2. تحديث الحقول الخاصة بالـ Refresh Token فقط
+                existingUser.RefreshTokenHash = user.RefreshTokenHash;
+                existingUser.RefreshTokenExpiresAt = user.RefreshTokenExpiresAt;
+                existingUser.RefreshTokenRevokedAt = user.RefreshTokenRevokedAt;
+
+                // 3. حفظ التغييرات في قاعدة البيانات
+                await _context.SaveChangesAsync();
+            }
         }
     }
 }
